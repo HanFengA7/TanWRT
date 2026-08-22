@@ -14,7 +14,7 @@
 
 | 分支 | 说明 |
 |---|---|
-| `tanwrt-25.12` | 你的工作分支，基于 `openwrt-25.12` + 你的定制（x86/64 + EFI + 16G 根分区） |
+| `tanwrt-25.12` | 你的工作分支，基于 `openwrt-25.12` + 你的定制（x86/64 + EFI + 4G 根分区） |
 | `openwrt-25.12` | 本地纯净跟踪官方的分支（建议平时不在此提交） |
 
 初始化时的关键操作（已做过，留作备忘）：
@@ -157,7 +157,7 @@ git reset --hard origin/tanwrt-25.12      # 或干脆重新 clone
 | 目标 | `x86/64` Generic | 64 位 x86 通用（PC / 虚拟机） |
 | 镜像 | EFI + BIOS | `GRUB_EFI_IMAGES=y`、`GRUB_IMAGES=y` |
 | 包管理 | APK | `CONFIG_USE_APK=y`（opkg 已禁用，产出 `.apk`） |
-| 根分区 | 16G（16384 MiB） | `CONFIG_TARGET_ROOTFS_PARTSIZE=16384`；128GB 盘剩约 112GiB 未分配 |
+| 根分区 | 4G（4096 MiB） | `CONFIG_TARGET_ROOTFS_PARTSIZE=4096`；镜像只含 16M 内核 + 4G squashfs 只读根，刷到 128G 盘后 OpenWRT 首次启动自动建 loop 覆盖层(rootfs_data)占满剩余≈124G |
 | 内核 | 6.12 | x86 目标在 25.12 锁定，不可在 menuconfig 选 |
 | 自带软件 | luci 等 | 见 `config.seed` |
 
@@ -171,9 +171,10 @@ git reset --hard origin/tanwrt-25.12      # 或干脆重新 clone
 2. **放大根分区重编会写大临时文件**：
    `gen_image_generic.sh` 用 `dd` 写零（非稀疏），会真实占满 `build_dir` 下约 `PARTSIZE × 2`（combined + efi 各一份）的空间。
    重编前务必 `df -h /` 确认空闲 > 该值，否则编译中途磁盘满会失败并残留巨文件（曾因此写满 140G 系统盘）。
+   另外 `gen_image_generic.sh` 的 `dd bs=$(PARTSIZE)MiB conv=sync` 还需 PARTSIZE 大小的**连续内存**作缓冲：构建机仅 7.7G 内存，PARTSIZE 超过 ~4G 会 `dd: memory exhausted`，故 `ROOTFS_PARTSIZE` 不要设太大（当前 4096）。
 
-3. **旧 `tanwrt`（小写，openwrt fork）仍留在 GitHub**：
-   现已不被任何 remote 引用，可保留作备份或直接删除。
+3. **旧小写 fork `tanwrt` 已删除**（2026-08-22）：
+   现仅保留独立仓库 `TanWRT`，无混淆。
 
 4. **feeds 官方源已锁分支**：
    `feeds.conf.default` 中官方源已带 `;openwrt-25.12` 后缀，不会漂移到 `main`。

@@ -200,27 +200,34 @@ git reset --hard origin/tanwrt-25.12      # 或干脆重新 clone
 
 ---
 
-## 10. 第三方包更新检查（luci-app-oxidns）
+## 10. 第三方包更新检查（内嵌于 package/）
 
-`luci-app-oxidns` 是第三方 luci 应用，以**源码内嵌**方式放在 `package/luci-app-oxidns/`，不通过 feeds 引入（OpenWRT 25.12 的 feeds 扫描无法正确展开外部 luci-app 包的 `luci.mk`，详见 [doc/CUSTOM_PACKAGES.md](CUSTOM_PACKAGES.md)）。因此它**不会自动跟随上游**，需手动同步。
+以下第三方包以**源码内嵌**方式放在 `package/` 下，不通过 feeds 引入（OpenWRT 25.12 的 feeds 扫描无法正确展开外部 luci-app 包的 `luci.mk`，详见 [doc/CUSTOM_PACKAGES.md](CUSTOM_PACKAGES.md)）。因此它们**不会自动跟随上游**，需手动同步：
+
+| 包 | 本地目录 | 上游仓库 | Makefile 路径 |
+|---|---|---|---|
+| `luci-app-oxidns` | `package/luci-app-oxidns` | `svenshi/luci-app-oxidns` | `Makefile` |
+| `luci-app-openclash` | `package/openclash` | `vernesong/openclash` | `luci-app-openclash/Makefile` |
+
+> OpenClash 仓库根只是容器，真正主包在 `luci-app-openclash/` 子目录；clone 后只取该子目录作为包内容（见 `PKG_SUB` 配置）。
 
 ### 版本锁定记录
 
-当前锁定的上游 commit 写在 `package/luci-app-oxidns/Makefile` 顶部注释：
+各包锁定的上游 commit 写在对应 `Makefile` 顶部注释，例如：
 
 ```makefile
-# UPSTREAM_COMMIT=dd32f8adb4f66ab092c4b02beda5e8412c7ae8df
+# UPSTREAM_COMMIT=c3a33c1d3407956fdf8f0e0b7c1a4c52e6ad9593
 ```
 
 同步后该注释会自动更新为新的上游 commit，下次检查据此判断「已是最新」。
 
 ### 自动检查（构建前置）
 
-`build.sh` 在 `[1/5] rebase` 之前插入了 `[0/5] 检查 luci-app-oxidns 更新`：
+`build.sh` 在 `[1/5] rebase` 之前插入了 `[0/5] 检查第三方包更新`，遍历 `PKG_NAMES` 清单：
 
 - 解析本地版本 + `# UPSTREAM_COMMIT=` 注释，用 `git ls-remote` 拿上游最新 commit（不依赖 GitHub API，免限流）
 - 已是最新 → 静默打印一行，继续构建
-- 有更新 → 终端前台交互询问是否同步；选 `y` 则自动 clone 覆盖并 `git add`，本次构建直接编进新版
+- 有更新 → 终端前台逐个交互询问是否同步；选 `y` 则自动 clone 覆盖并 `git add`，本次构建直接编进新版
 - 非交互（后台/管道）→ 不卡住，仅提示手动运行 `./build.sh sync`
 
 ### 仅同步（不构建）
@@ -231,23 +238,28 @@ git reset --hard origin/tanwrt-25.12      # 或干脆重新 clone
 ./build.sh sync
 ```
 
-行为：检查上游 → 有更新则交互确认（`发现更新，是否同步 luci-app-oxidns 到 <commit>? [y/N]`）→ 选 `y` 后 clone 覆盖、清掉 `.git`/README、更新 `# UPSTREAM_COMMIT=` 注释、`git add`（**不自动 commit**，交给你写提交信息）。已是最新则直接退出。
+行为：遍历所有第三方包 → 有更新则逐个交互确认（`发现更新，是否同步 <包名> 到 <commit>? [y/N]`）→ 选 `y` 后 clone 覆盖、清掉 `.git`/README、更新 `# UPSTREAM_COMMIT=` 注释、`git add`（**不自动 commit**，交给你写提交信息）。已是最新则直接退出。
 
 ### 跳过检查
 
 ```bash
-./build.sh --no-check        # 跳过 oxidns 更新检查，直接构建
+./build.sh --no-check        # 跳过第三方包更新检查，直接构建
 ```
 
-### 手动同步步骤（不依赖脚本时）
+### 新增第三方包
+
+在 `build.sh` 顶部往 `PKG_NAMES` 数组加一项，并补 `PKG_DIR` / `PKG_REPO` / `PKG_MK` / `PKG_SUB` 四个关联数组的对应条目即可，检查与同步逻辑自动覆盖。
+
+### 手动同步步骤（以 openclash 为例，不依赖脚本时）
 
 ```bash
-rm -rf package/luci-app-oxidns
-git clone https://github.com/svenshi/luci-app-oxidns /tmp/luci-app-oxidns
-cp -r /tmp/luci-app-oxidns package/luci-app-oxidns
-rm -rf package/luci-app-oxidns/.git package/luci-app-oxidns/README.md package/luci-app-oxidns/AGENTS.md
-# 在 package/luci-app-oxidns/Makefile 顶部加：# UPSTREAM_COMMIT=<上游最新 commit>
-git add package/luci-app-oxidns
-git commit -m "bump luci-app-oxidns to <commit>"
+rm -rf package/openclash
+git clone https://github.com/vernesong/openclash /tmp/openclash
+mkdir -p package/openclash
+cp -r /tmp/openclash/luci-app-openclash/. package/openclash/
+rm -rf package/openclash/.git package/openclash/README.md
+# 在 package/openclash/luci-app-openclash/Makefile 顶部加：# UPSTREAM_COMMIT=<上游最新 commit>
+git add package/openclash
+git commit -m "bump luci-app-openclash to <commit>"
 ```
 

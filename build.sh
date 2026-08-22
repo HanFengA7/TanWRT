@@ -4,33 +4,47 @@
 #   ./build.sh          # 编 x86/64（默认，使用 config.seed）
 #   ./build.sh r5c      # 编 NanoPi R5C（rockchip/armv8，使用 config-r5c.seed）
 #   ./build.sh all      # 依次编 x86 + r5c（中间自动 make clean，耗时翻倍）
-#   ./build.sh sync     # 仅检查并同步 luci-app-oxidns（有更新交互确认）
-#   ./build.sh --no-check  # 跳过 oxidns 更新检查
+#   ./build.sh sync     # 仅检查并同步第三方包（有更新逐个交互确认）
+#   ./build.sh --no-check  # 跳过第三方包更新检查
 set -euo pipefail
 cd "$(dirname "$0")"
 
-OXIDNS_REPO="https://github.com/svenshi/luci-app-oxidns"
-OXIDNS_DIR="package/luci-app-oxidns"
 SKIP_CHECK=0
 for a in "$@"; do
   [ "$a" = "--no-check" ] && SKIP_CHECK=1
 done
 
-# ---- oxidns 第三方包：同步到上游最新版 ----
-# 交互确认后 clone 覆盖、清残留、写 UPSTREAM_COMMIT 注释、git add。
-# 不自动 commit，交给你决定提交信息。
-sync_oxidns() {
-  [ -d "$OXIDNS_DIR" ] || { echo "✗ 找不到 $OXIDNS_DIR"; exit 2; }
+# ---- 第三方包清单（源码内嵌于 package/，不随 upstream 自动更新） ----
+# 每项: 名称|本地目录|上游仓库|Makefile 相对路径|clone 后取用的子目录(空=仓库根)
+#   openclash 仓库根含 luci-app-openclash/ 子目录，故 subdir=luci-app-openclash
+declare -a PKG_NAMES=("oxidns" "openclash")
+declare -A PKG_DIR PKG_REPO PKG_MK PKG_SUB
+PKG_DIR[oxidns]="package/luci-app-oxidns"
+PKG_REPO[oxidns]="https://github.com/svenshi/luci-app-oxidns"
+PKG_MK[oxidns]="Makefile"
+PKG_SUB[oxidns]=""
+
+PKG_DIR[openclash]="package/openclash"
+PKG_REPO[openclash]="https://github.com/vernesong/openclash"
+PKG_MK[openclash]="luci-app-openclash/Makefile"
+PKG_SUB[openclash]="luci-app-openclash"
+
+# ---- 同步单个第三方包到上游最新版 ----
+# 交互确认后 clone 覆盖、清残留、写 UPSTREAM_COMMIT 注释、git add（不自动 commit）。
+sync_pkg() {
+  local name="$1"
+  local dir="${PKG_DIR[$name]}" repo="${PKG_REPO[$name]}" mk="${PKG_MK[$name]}" sub="${PKG_SUB[$name]}"
+  [ -d "$dir" ] || { echo "✗ 找不到 $dir"; return 1; }
 
   local ver rel locked upstream
-  ver=$(grep -m1 '^PKG_VERSION'  "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
-  rel=$(grep -m1 '^PKG_RELEASE'  "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
-  locked=$(grep -m1 '# UPSTREAM_COMMIT=' "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+  ver=$(grep -m1 '^PKG_VERSION'  "$dir/$mk" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+  rel=$(grep -m1 '^PKG_RELEASE'  "$dir/$mk" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+  locked=$(grep -m1 '# UPSTREAM_COMMIT=' "$dir/$mk" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
 
-  upstream=$(git ls-remote "$OXIDNS_REPO" HEAD 2>/dev/null | awk '{print $1}') || true
+  upstream=$(git ls-remote "$repo" HEAD 2>/dev/null | awk '{print $1}') || true
   if [ -z "$upstream" ]; then
-    echo "✗ 无法访问上游 ($OXIDNS_REPO)，请检查网络"
-    exit 3
+    echo "✗ 无法访问上游 ($repo)，请检查网络"
+    return 1
   fi
 
   echo "本地版本: ${ver:-?}-r${rel:-?}  (锁定 commit: ${locked:-未记录})"
@@ -41,24 +55,28 @@ sync_oxidns() {
     return 0
   fi
 
-  # 仅在 TTY 下交互询问；非交互（后台/管道）直接拒绝同步，避免卡住
   if [ ! -t 0 ]; then
     echo "△ 非交互模式，跳过同步。如需更新请在终端前台运行: ./build.sh sync"
     return 0
   fi
 
-  read -r -p "发现更新，是否同步 luci-app-oxidns 到 $upstream? [y/N] " ans
+  read -r -p "发现更新，是否同步 $name 到 $upstream? [y/N] " ans
   case "$ans" in
     y|Y)
-      echo "正在同步..."
-      rm -rf "$OXIDNS_DIR"
-      git clone "$OXIDNS_REPO" /tmp/luci-app-oxidns >/dev/null 2>&1
-      cp -r /tmp/luci-app-oxidns "$OXIDNS_DIR"
-      rm -rf "$OXIDNS_DIR/.git" "$OXIDNS_DIR/README.md" "$OXIDNS_DIR/AGENTS.md"
-      sed -i "1i # UPSTREAM_COMMIT=$upstream" "$OXIDNS_DIR/Makefile"
-      git add "$OXIDNS_DIR"
-      echo "✓ 已同步到 $upstream（已 git add，尚未提交）"
-      echo "  提交命令: git commit -m 'bump luci-app-oxidns to $upstream'"
+      echo "正在同步 $name..."
+      rm -rf "$dir"
+      git clone "$repo" "/tmp/pkg-$name" >/dev/null 2>&1
+      if [ -n "$sub" ]; then
+        mkdir -p "$dir"
+        cp -r "/tmp/pkg-$name/$sub/." "$dir/"
+      else
+        cp -r "/tmp/pkg-$name" "$dir"
+      fi
+      rm -rf "$dir/.git" "$dir/README.md" "$dir/AGENTS.md" "$dir/.github" "$dir/.gitattributes" "$dir/.gitignore"
+      sed -i "1i # UPSTREAM_COMMIT=$upstream" "$dir/$mk"
+      git add "$dir"
+      echo "✓ 已同步 $name 到 $upstream（已 git add，尚未提交）"
+      echo "  提交命令: git commit -m 'bump $name to $upstream'"
       ;;
     *)
       echo "已取消，未做任何改动"
@@ -66,45 +84,40 @@ sync_oxidns() {
   esac
 }
 
-# ---- oxidns 第三方包更新检查（构建流程前置） ----
+# ---- 第三方包更新检查（构建流程前置） ----
 # 放在 rebase 之前：若同步了新版本，后续 defconfig/编译自然带上。
-check_oxidns_update() {
+check_pkgs_update() {
   [ "$SKIP_CHECK" = 1 ] && return 0
-  [ -d "$OXIDNS_DIR" ] || return 0
-
-  local ver rel locked upstream
-  ver=$(grep -m1 '^PKG_VERSION'  "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
-  rel=$(grep -m1 '^PKG_RELEASE'  "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
-  locked=$(grep -m1 '# UPSTREAM_COMMIT=' "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
-
-  # 拿上游最新 commit（不依赖 GitHub API，免限流）
-  upstream=$(git ls-remote "$OXIDNS_REPO" HEAD 2>/dev/null | awk '{print $1}') || true
-  if [ -z "$upstream" ]; then
-    echo "  [oxidns] 无法访问上游，跳过检查（网络问题）"
-    return 0
-  fi
-
-  if [ -n "$locked" ] && [ "$locked" = "$upstream" ]; then
-    echo "  [oxidns] 已是最新 ($ver-r$rel, 上游 $upstream)"
-    return 0
-  fi
-
-  echo "  [oxidns] 有更新可用！"
-  echo "    本地锁定: ${locked:-未记录}"
-  echo "    上游最新: $upstream"
-  echo "    本地版本: ${ver:-?}-r${rel:-?}"
-
-  # 仅在 TTY 下交互询问；非交互（后台/管道）自动跳过
-  if [ ! -t 0 ]; then
-    echo "    （非交互模式，跳过自动同步；如需更新请手动运行 ./build.sh sync）"
-    return 0
-  fi
-
-  read -r -p "    是否同步 luci-app-oxidns 到最新版? [y/N] " ans
-  case "$ans" in
-    y|Y) sync_oxidns ;;
-    *)   echo "    跳过 oxidns 更新（当前构建仍使用旧版本）" ;;
-  esac
+  local name dir mk repo upstream ver rel locked
+  for name in "${PKG_NAMES[@]}"; do
+    dir="${PKG_DIR[$name]}"; mk="${PKG_MK[$name]}"; repo="${PKG_REPO[$name]}"
+    [ -d "$dir" ] || continue
+    ver=$(grep -m1 '^PKG_VERSION'  "$dir/$mk" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    rel=$(grep -m1 '^PKG_RELEASE'  "$dir/$mk" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    locked=$(grep -m1 '# UPSTREAM_COMMIT=' "$dir/$mk" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+    upstream=$(git ls-remote "$repo" HEAD 2>/dev/null | awk '{print $1}') || true
+    if [ -z "$upstream" ]; then
+      echo "  [$name] 无法访问上游，跳过检查（网络问题）"
+      continue
+    fi
+    if [ -n "$locked" ] && [ "$locked" = "$upstream" ]; then
+      echo "  [$name] 已是最新 ($ver-r$rel, 上游 $upstream)"
+      continue
+    fi
+    echo "  [$name] 有更新可用！"
+    echo "    本地锁定: ${locked:-未记录}"
+    echo "    上游最新: $upstream"
+    echo "    本地版本: ${ver:-?}-r${rel:-?}"
+    if [ ! -t 0 ]; then
+      echo "    （非交互模式，跳过自动同步；如需更新请手动运行 ./build.sh sync）"
+      continue
+    fi
+    read -r -p "    是否同步 $name 到最新版? [y/N] " ans
+    case "$ans" in
+      y|Y) sync_pkg "$name" ;;
+      *)   echo "    跳过 $name 更新（当前构建仍使用旧版本）" ;;
+    esac
+  done
 }
 
 TARGET="${1:-x86}"
@@ -117,14 +130,16 @@ case "$TARGET" in
     exit 0
     ;;
   sync)
-    sync_oxidns
+    for name in "${PKG_NAMES[@]}"; do
+      sync_pkg "$name"
+    done
     exit 0
     ;;
   *) echo "未知目标: $TARGET（支持 x86 | r5c | all | sync）"; exit 1 ;;
 esac
 
-echo "[0/5] 检查 luci-app-oxidns 更新"
-check_oxidns_update
+echo "[0/5] 检查第三方包更新"
+check_pkgs_update
 
 echo "[1/5] 同步官方更新（rebase upstream/openwrt-25.12）"
 git fetch upstream

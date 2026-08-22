@@ -1,4 +1,4 @@
-# 集成第三方软件包（以 luci-app-oxidns 为例）
+# 集成第三方软件包（in-tree package 方式）
 
 本仓库把第三方包以 **in-tree package（直接放 package/ 目录）** 方式集成，而不是 OpenWRT 标准的 feeds 方式。原因见末尾「为什么不用 feeds」。
 
@@ -7,8 +7,11 @@
 | 包 | 位置 | 说明 |
 |---|---|---|
 | `luci-app-oxidns` | `package/luci-app-oxidns/` | OxiDNS 的 LuCI 管理页（Services -> OxiDNS）。runtime 的 OxiDNS 内核由插件首次运行时从 GitHub Releases 下载，不在固件内 |
+| `luci-app-openclash` | `package/openclash/luci-app-openclash/` | OpenClash 代理前端（Services -> OpenClash）。`core` 二进制、geoip/geosite 数据库默认编译时从上游拉取，需联网 |
 
-两个 target（x86/64、NanoPi R5C）的 `config*.seed` 都已 `CONFIG_PACKAGE_luci-app-oxidns=y`，`build.sh` 编译时自动带入。
+两个 target（x86/64、NanoPi R5C）的 `config*.seed` 都已 `CONFIG_PACKAGE_luci-app-oxidns=y` 与 `CONFIG_PACKAGE_luci-app-openclash=y`，`build.sh` 编译时自动带入。
+
+> **OpenClash 特例**：上游 `vernesong/openclash` 仓库根只是容器，真正主包在 `luci-app-openclash/` 子目录。集成时要 clone 整个仓库、再只取该子目录作为 `package/openclash/` 的内容（见 `build.sh` 里的 `PKG_SUB=luci-app-openclash`）。
 
 ## 怎么加一个新的第三方包（in-tree 方式）
 

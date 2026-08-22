@@ -4,6 +4,10 @@
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
 #
+# TanWRT: force host rebuild. The prebuilt toolchain container ships autom4te
+# with perl paths baked to the openwrt/openwrt CI workspace, which breaks any
+# host tool rebuild on forks. Changing this dir invalidates the .prepared stamp
+# so CI rebuilds autoconf and regenerates autom4te with correct paths.
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=autoconf

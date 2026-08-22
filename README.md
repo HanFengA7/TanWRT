@@ -77,6 +77,17 @@ git push --force-with-lease origin tanwrt-25.12
 - **x86 首次刷机**：将 `bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz` 写入磁盘（`dd` / balenaEtcher / Ventoy 启动后 `dd`）。升级：`sysupgrade <img.gz>`，保持 `ROOTFS_PARTSIZE` 不变以保配置。
 - **R5C 首次刷机**：将 `bin/targets/rockchip/armv8/openwrt-rockchip-armv8-friendlyarm_nanopi-r5c-squashfs-*.img.gz` 写入 eMMC/SD（参考 FriendlyElec 官方烧录方式，或在已运行的 OpenWRT 上用 `sysupgrade` 升级）。升级：`sysupgrade <img.gz>`。
 
+## 默认后台地址
+
+两份配置均未自定义 LAN，沿用 OpenWRT 默认值：
+
+- 网页后台（LuCI）：http://192.168.1.1
+- SSH / WinSCP：192.168.1.1（用户 root，首次登录无密码，须在 LuCI 或 passwd 设置）
+- 设备默认 hostname：OpenWrt
+
+> 出厂默认 LAN 网段 192.168.1.0/24。若你的上游网络也是该网段，先把电脑网口设成同段（如 192.168.1.2/24）再访问。
+> 想改默认地址/网段：在 files/etc/config/network 放一份 network 配置，刷机即生效（见「自定义」）；或首次登录后直接在 LuCI 改。
+
 ## 自定义
 
 - **配置差异**：改对应的 `config*.seed` → `make defconfig` → 提交（勿直接改 `.config`，`build.sh` 会用 `config*.seed` 覆盖它）

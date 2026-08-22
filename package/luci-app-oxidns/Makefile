@@ -1,3 +1,4 @@
+# UPSTREAM_COMMIT=dd32f8adb4f66ab092c4b02beda5e8412c7ae8df
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-oxidns

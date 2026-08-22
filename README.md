@@ -6,6 +6,7 @@
 
 - [doc/SYNC.md](doc/SYNC.md)：同步官方更新、rebase/冲突/升级到下一大版本、多目标构建说明
 - [doc/MENUCONFIG.md](doc/MENUCONFIG.md)：用 make menuconfig 手动改配置并编译的教程
+- [doc/CUSTOM_PACKAGES.md](doc/CUSTOM_PACKAGES.md)：如何集成第三方包（如已内置的 luci-app-oxidns）
 
 ## 这是什么
 

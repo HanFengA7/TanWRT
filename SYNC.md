@@ -14,7 +14,7 @@
 
 | 分支 | 说明 |
 |---|---|
-| `tanwrt-25.12` | 你的工作分支，基于 `openwrt-25.12` + 你的定制（x86/64 + EFI + 4G 根分区） |
+| `tanwrt-25.12` | 你的工作分支，基于 `openwrt-25.12` + 你的定制（x86/64 + EFI + 4G 根分区；另支持 NanoPi R5C / rockchip，见 `config-r5c.seed`） |
 | `openwrt-25.12` | 本地纯净跟踪官方的分支（建议平时不在此提交） |
 
 初始化时的关键操作（已做过，留作备忘）：
@@ -122,7 +122,7 @@ git push -u origin tanwrt-26.x
 
 **让「升版本」变轻松的精髓**：把定制都做成可移植资产，与源码解耦——
 
-- 配置 → `config.seed`（纯文本差异，不依赖整份 `.config`）
+- 配置 → `config.seed` / `config-r5c.seed`（纯文本差异，不依赖整份 `.config`）
 - 默认配置 → `files/` 目录（跨版本原样拷贝）
 - 自己的包 → 独立 feed 仓（升版本只改 `feeds.conf` 指针）
 - 补丁 → quilt/series 管理，便于重放
@@ -159,7 +159,7 @@ git reset --hard origin/tanwrt-25.12      # 或干脆重新 clone
 | 包管理 | APK | `CONFIG_USE_APK=y`（opkg 已禁用，产出 `.apk`） |
 | 根分区 | 4G（4096 MiB） | `CONFIG_TARGET_ROOTFS_PARTSIZE=4096`；镜像只含 16M 内核 + 4G squashfs 只读根，刷到 128G 盘后 OpenWRT 首次启动自动建 loop 覆盖层(rootfs_data)占满剩余≈124G |
 | 内核 | 6.12 | x86 目标在 25.12 锁定，不可在 menuconfig 选 |
-| 自带软件 | luci 等 | 见 `config.seed` |
+| 自带软件 | luci 等 | 见 `config*.seed` |
 
 ---
 
@@ -178,3 +178,22 @@ git reset --hard origin/tanwrt-25.12      # 或干脆重新 clone
 
 4. **feeds 官方源已锁分支**：
    `feeds.conf.default` 中官方源已带 `;openwrt-25.12` 后缀，不会漂移到 `main`。
+
+## 9. 多目标构建（x86 / NanoPi R5C）
+
+本仓库同时维护两个设备，分属不同架构（x86/64 与 rockchip/armv8），OpenWRT 一份 `.config` 只能编一个，因此：
+
+- `config.seed`：x86/64 Generic（EFI+BIOS）
+- `config-r5c.seed`：NanoPi R5C（FriendlyElec，RK3568，双 2.5GbE，RTL8125 驱动自动默认选中）
+
+`build.sh` 已参数化：
+
+```bash
+./build.sh          # 编 x86/64（默认，用 config.seed）
+./build.sh r5c      # 编 NanoPi R5C（用 config-r5c.seed）
+./build.sh all      # 依次编 x86 + R5C（中间自动 make clean，耗时翻倍）
+```
+
+切换架构时，`build.sh` 依据本地标记 `.built-target` 自动 `make clean` 清掉上次其他架构的产物，避免交叉污染；同架构连续构建则增量复用。两个镜像分别产出在 `bin/targets/x86/64/` 与 `bin/targets/rockchip/armv8/`。
+
+新增设备时：复制一份 `config-<名>.seed`（基于对应 target + DEVICE，跑 `make defconfig && ./scripts/diffconfig.sh > config-<名>.seed`），再在 `build.sh` 的 `case` 里加一行即可。

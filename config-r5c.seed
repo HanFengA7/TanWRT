@@ -1,0 +1,39 @@
+CONFIG_TARGET_rockchip=y
+CONFIG_TARGET_rockchip_armv8=y
+CONFIG_TARGET_rockchip_armv8_DEVICE_friendlyarm_nanopi-r5c=y
+CONFIG_DRIVER_11AX_SUPPORT=y
+CONFIG_KERNEL_PAGE_POOL=y
+CONFIG_KERNEL_RELAY=y
+# CONFIG_PACKAGE_e2fsprogs is not set
+CONFIG_PACKAGE_eip197-mini-firmware=y
+CONFIG_PACKAGE_fit-check-sign=y
+CONFIG_PACKAGE_kmod-crypto-authenc=y
+CONFIG_PACKAGE_kmod-crypto-des=y
+CONFIG_PACKAGE_kmod-crypto-md5=y
+CONFIG_PACKAGE_kmod-crypto-sha1=y
+CONFIG_PACKAGE_kmod-crypto-sha256=y
+CONFIG_PACKAGE_kmod-leds-gpio=y
+CONFIG_PACKAGE_kmod-mt76-connac=y
+CONFIG_PACKAGE_kmod-mt76-core=y
+CONFIG_PACKAGE_kmod-mt7915e=y
+CONFIG_PACKAGE_kmod-nls-base=y
+CONFIG_PACKAGE_kmod-rtc-pcf8563=y
+CONFIG_PACKAGE_kmod-thermal=y
+CONFIG_PACKAGE_kmod-usb-common=y
+CONFIG_PACKAGE_kmod-usb-core=y
+CONFIG_PACKAGE_kmod-usb-xhci-hcd=y
+CONFIG_PACKAGE_kmod-usb3=y
+# CONFIG_PACKAGE_libblkid is not set
+# CONFIG_PACKAGE_libcomerr is not set
+# CONFIG_PACKAGE_libe2p is not set
+# CONFIG_PACKAGE_libext2fs is not set
+# CONFIG_PACKAGE_libf2fs is not set
+# CONFIG_PACKAGE_libpthread is not set
+# CONFIG_PACKAGE_librt is not set
+# CONFIG_PACKAGE_libsmartcols is not set
+# CONFIG_PACKAGE_libss is not set
+# CONFIG_PACKAGE_libuuid is not set
+# CONFIG_PACKAGE_mkf2fs is not set
+# CONFIG_PACKAGE_partx-utils is not set
+# CONFIG_TARGET_ROOTFS_EXT4FS is not set
+CONFIG_TARGET_ROOTFS_PARTSIZE=4096

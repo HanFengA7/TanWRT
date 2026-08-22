@@ -11,7 +11,7 @@
 | 镜像 | EFI + BIOS（GRUB）|
 | 包管理 | APK（`CONFIG_USE_APK=y`，opkg 已禁用）|
 | 内核 | 6.12（x86 目标在 25.12 锁定，不可在 menuconfig 选）|
-| 根分区 | 16 GiB（128 GB 物理盘剩约 112 GiB 未分配）|
+| 根分区 | 4 GiB（squashfs 只读层）；128 GB 物理盘剩余空间由 OpenWRT 首次启动自动建 loop 覆盖层(rootfs_data)占满 |
 | 自带软件 | luci 等（见 `config.seed`）|
 
 ## 仓库结构
@@ -60,8 +60,9 @@ git push --force-with-lease origin tanwrt-25.12
 
 ## 刷机与升级
 
-- **首次刷机**：将 `bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz` 写入磁盘（dd / balenaEtcher）
-- **升级**：用同一文件走 `sysupgrade`（写整盘镜像，保留配置与 16G 根分区）
+- **首次刷机**：将 `bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz` 写入磁盘（`dd` / balenaEtcher / 物理机用 Ventoy 启动后 `dd`）
+- **磁盘占用**：镜像只含 `sda1`(16M 内核) + `sda2`(4G squashfs 只读根)。刷到 128G 盘后，OpenWRT 首次启动会在磁盘尾部剩余空间上自动创建 loop 覆盖层 `rootfs_data`（f2fs），你的配置与后续安装的软件都落在这一层，约 124G 自动可用，无需手动分区或扩容。
+- **升级**：`sysupgrade openwrt-x86-64-generic-squashfs-combined-efi.img.gz`，配置默认保留（升级会备份并恢复覆盖层）。保持 `ROOTFS_PARTSIZE` 不变可确保升级后覆盖层偏移一致、配置不丢。
 
 ## 自定义
 

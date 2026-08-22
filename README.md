@@ -50,6 +50,21 @@ git checkout tanwrt-25.12
 
 > x86 与 rockchip 是不同架构，一份 `.config` 只能编一个。`build.sh` 用本地标记 `.built-target` 记录上次架构，只有切换时才 `make clean`，同架构增量复用。
 
+## 第三方包更新（luci-app-oxidns）
+
+`luci-app-oxidns` 以源码形式内嵌在 `package/luci-app-oxidns/`（不放 feeds，原因见 [doc/CUSTOM_PACKAGES.md](doc/CUSTOM_PACKAGES.md)），不会自动跟随上游。它的版本锁定记录写在 `package/luci-app-oxidns/Makefile` 顶部的 `# UPSTREAM_COMMIT=` 注释里。
+
+`build.sh` 在构建前会自动检查是否有更新；你也可以单独同步：
+
+```bash
+./build.sh            # 构建前自动检查 oxidns，有更新会交互询问是否同步
+./build.sh sync       # 仅检查并同步 luci-app-oxidns（有更新交互确认，不自动提交）
+./build.sh --no-check # 跳过 oxidns 更新检查
+```
+
+- `sync` 子命令：仅同步包、不做 rebase/feeds/编译；确认同步后会 `git add` 但不自动 commit，由你决定提交信息。
+- 非交互环境（后台/管道）下不会卡住询问，仅提示去终端前台运行 `./build.sh sync`。
+
 ## 同步官方更新
 
 一条命令即可（详见 [doc/SYNC.md](doc/SYNC.md)）：

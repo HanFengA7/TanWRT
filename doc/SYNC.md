@@ -197,3 +197,57 @@ git reset --hard origin/tanwrt-25.12      # 或干脆重新 clone
 切换架构时，`build.sh` 依据本地标记 `.built-target` 自动 `make clean` 清掉上次其他架构的产物，避免交叉污染；同架构连续构建则增量复用。两个镜像分别产出在 `bin/targets/x86/64/` 与 `bin/targets/rockchip/armv8/`。
 
 新增设备时：复制一份 `config-<名>.seed`（基于对应 target + DEVICE，跑 `make defconfig && ./scripts/diffconfig.sh > config-<名>.seed`），再在 `build.sh` 的 `case` 里加一行即可。
+
+---
+
+## 10. 第三方包更新检查（luci-app-oxidns）
+
+`luci-app-oxidns` 是第三方 luci 应用，以**源码内嵌**方式放在 `package/luci-app-oxidns/`，不通过 feeds 引入（OpenWRT 25.12 的 feeds 扫描无法正确展开外部 luci-app 包的 `luci.mk`，详见 [doc/CUSTOM_PACKAGES.md](CUSTOM_PACKAGES.md)）。因此它**不会自动跟随上游**，需手动同步。
+
+### 版本锁定记录
+
+当前锁定的上游 commit 写在 `package/luci-app-oxidns/Makefile` 顶部注释：
+
+```makefile
+# UPSTREAM_COMMIT=dd32f8adb4f66ab092c4b02beda5e8412c7ae8df
+```
+
+同步后该注释会自动更新为新的上游 commit，下次检查据此判断「已是最新」。
+
+### 自动检查（构建前置）
+
+`build.sh` 在 `[1/5] rebase` 之前插入了 `[0/5] 检查 luci-app-oxidns 更新`：
+
+- 解析本地版本 + `# UPSTREAM_COMMIT=` 注释，用 `git ls-remote` 拿上游最新 commit（不依赖 GitHub API，免限流）
+- 已是最新 → 静默打印一行，继续构建
+- 有更新 → 终端前台交互询问是否同步；选 `y` 则自动 clone 覆盖并 `git add`，本次构建直接编进新版
+- 非交互（后台/管道）→ 不卡住，仅提示手动运行 `./build.sh sync`
+
+### 仅同步（不构建）
+
+只想更新包、不想跑完整构建时：
+
+```bash
+./build.sh sync
+```
+
+行为：检查上游 → 有更新则交互确认（`发现更新，是否同步 luci-app-oxidns 到 <commit>? [y/N]`）→ 选 `y` 后 clone 覆盖、清掉 `.git`/README、更新 `# UPSTREAM_COMMIT=` 注释、`git add`（**不自动 commit**，交给你写提交信息）。已是最新则直接退出。
+
+### 跳过检查
+
+```bash
+./build.sh --no-check        # 跳过 oxidns 更新检查，直接构建
+```
+
+### 手动同步步骤（不依赖脚本时）
+
+```bash
+rm -rf package/luci-app-oxidns
+git clone https://github.com/svenshi/luci-app-oxidns /tmp/luci-app-oxidns
+cp -r /tmp/luci-app-oxidns package/luci-app-oxidns
+rm -rf package/luci-app-oxidns/.git package/luci-app-oxidns/README.md package/luci-app-oxidns/AGENTS.md
+# 在 package/luci-app-oxidns/Makefile 顶部加：# UPSTREAM_COMMIT=<上游最新 commit>
+git add package/luci-app-oxidns
+git commit -m "bump luci-app-oxidns to <commit>"
+```
+

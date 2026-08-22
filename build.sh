@@ -4,6 +4,7 @@
 #   ./build.sh          # 编 x86/64（默认，使用 config.seed）
 #   ./build.sh r5c      # 编 NanoPi R5C（rockchip/armv8，使用 config-r5c.seed）
 #   ./build.sh all      # 依次编 x86 + r5c（中间自动 make clean，耗时翻倍）
+#   ./build.sh sync     # 仅检查并同步 luci-app-oxidns（有更新交互确认）
 #   ./build.sh --no-check  # 跳过 oxidns 更新检查
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -15,19 +16,57 @@ for a in "$@"; do
   [ "$a" = "--no-check" ] && SKIP_CHECK=1
 done
 
-TARGET="${1:-x86}"
-case "$TARGET" in
-  x86) SEED=config.seed ;;
-  r5c) SEED=config-r5c.seed ;;
-  all)
-    "$0" ${SKIP_CHECK:+"--no-check"} x86
-    "$0" ${SKIP_CHECK:+"--no-check"} r5c
-    exit 0
-    ;;
-  *) echo "未知目标: $TARGET（支持 x86 | r5c | all）"; exit 1 ;;
-esac
+# ---- oxidns 第三方包：同步到上游最新版 ----
+# 交互确认后 clone 覆盖、清残留、写 UPSTREAM_COMMIT 注释、git add。
+# 不自动 commit，交给你决定提交信息。
+sync_oxidns() {
+  [ -d "$OXIDNS_DIR" ] || { echo "✗ 找不到 $OXIDNS_DIR"; exit 2; }
 
-# ---- oxidns 第三方包更新检查 ----
+  local ver rel locked upstream
+  ver=$(grep -m1 '^PKG_VERSION'  "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+  rel=$(grep -m1 '^PKG_RELEASE'  "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+  locked=$(grep -m1 '# UPSTREAM_COMMIT=' "$OXIDNS_DIR/Makefile" 2>/dev/null | cut -d'=' -f2 | tr -d ' ')
+
+  upstream=$(git ls-remote "$OXIDNS_REPO" HEAD 2>/dev/null | awk '{print $1}') || true
+  if [ -z "$upstream" ]; then
+    echo "✗ 无法访问上游 ($OXIDNS_REPO)，请检查网络"
+    exit 3
+  fi
+
+  echo "本地版本: ${ver:-?}-r${rel:-?}  (锁定 commit: ${locked:-未记录})"
+  echo "上游最新: $upstream"
+
+  if [ -n "$locked" ] && [ "$locked" = "$upstream" ]; then
+    echo "✓ 已是最新，无需同步"
+    return 0
+  fi
+
+  # 仅在 TTY 下交互询问；非交互（后台/管道）直接拒绝同步，避免卡住
+  if [ ! -t 0 ]; then
+    echo "△ 非交互模式，跳过同步。如需更新请在终端前台运行: ./build.sh sync"
+    return 0
+  fi
+
+  read -r -p "发现更新，是否同步 luci-app-oxidns 到 $upstream? [y/N] " ans
+  case "$ans" in
+    y|Y)
+      echo "正在同步..."
+      rm -rf "$OXIDNS_DIR"
+      git clone "$OXIDNS_REPO" /tmp/luci-app-oxidns >/dev/null 2>&1
+      cp -r /tmp/luci-app-oxidns "$OXIDNS_DIR"
+      rm -rf "$OXIDNS_DIR/.git" "$OXIDNS_DIR/README.md" "$OXIDNS_DIR/AGENTS.md"
+      sed -i "1i # UPSTREAM_COMMIT=$upstream" "$OXIDNS_DIR/Makefile"
+      git add "$OXIDNS_DIR"
+      echo "✓ 已同步到 $upstream（已 git add，尚未提交）"
+      echo "  提交命令: git commit -m 'bump luci-app-oxidns to $upstream'"
+      ;;
+    *)
+      echo "已取消，未做任何改动"
+      ;;
+  esac
+}
+
+# ---- oxidns 第三方包更新检查（构建流程前置） ----
 # 放在 rebase 之前：若同步了新版本，后续 defconfig/编译自然带上。
 check_oxidns_update() {
   [ "$SKIP_CHECK" = 1 ] && return 0
@@ -57,28 +96,32 @@ check_oxidns_update() {
 
   # 仅在 TTY 下交互询问；非交互（后台/管道）自动跳过
   if [ ! -t 0 ]; then
-    echo "    （非交互模式，跳过自动同步；如需更新请手动运行 check-oxidns.sh）"
+    echo "    （非交互模式，跳过自动同步；如需更新请手动运行 ./build.sh sync）"
     return 0
   fi
 
   read -r -p "    是否同步 luci-app-oxidns 到最新版? [y/N] " ans
   case "$ans" in
-    y|Y)
-      echo "    正在同步..."
-      rm -rf "$OXIDNS_DIR"
-      git clone "$OXIDNS_REPO" /tmp/luci-app-oxidns >/dev/null 2>&1
-      cp -r /tmp/luci-app-oxidns "$OXIDNS_DIR"
-      rm -rf "$OXIDNS_DIR/.git" "$OXIDNS_DIR/README.md" "$OXIDNS_DIR/AGENTS.md"
-      # 写入上游 commit 注释，供下次检查对比
-      sed -i "1i # UPSTREAM_COMMIT=$upstream" "$OXIDNS_DIR/Makefile"
-      git add "$OXIDNS_DIR"
-      echo "    已同步到 $upstream（已 git add，将在构建后一起提交）"
-      ;;
-    *)
-      echo "    跳过 oxidns 更新（当前构建仍使用旧版本）"
-      ;;
+    y|Y) sync_oxidns ;;
+    *)   echo "    跳过 oxidns 更新（当前构建仍使用旧版本）" ;;
   esac
 }
+
+TARGET="${1:-x86}"
+case "$TARGET" in
+  x86) SEED=config.seed ;;
+  r5c) SEED=config-r5c.seed ;;
+  all)
+    "$0" ${SKIP_CHECK:+"--no-check"} x86
+    "$0" ${SKIP_CHECK:+"--no-check"} r5c
+    exit 0
+    ;;
+  sync)
+    sync_oxidns
+    exit 0
+    ;;
+  *) echo "未知目标: $TARGET（支持 x86 | r5c | all | sync）"; exit 1 ;;
+esac
 
 echo "[0/5] 检查 luci-app-oxidns 更新"
 check_oxidns_update

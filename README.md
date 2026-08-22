@@ -1,108 +1,70 @@
-![OpenWrt logo](include/logo.png)
+# TanWRT
 
-OpenWrt Project is a Linux operating system targeting embedded devices. Instead
-of trying to create a single, static firmware, OpenWrt provides a fully
-writable filesystem with package management. This frees you from the
-application selection and configuration provided by the vendor and allows you
-to customize the device through the use of packages to suit any application.
-For developers, OpenWrt is the framework to build an application without having
-to build a complete firmware around it; for users this means the ability for
-full customization, to use the device in ways never envisioned.
+基于 OpenWRT 官方源码的个人维护分支，采用「路线 A」轻量维护模式：以官方为基座，把自己的定制作为增量层叠在上面，方便随时同步官方更新、也方便日后升级到下一个大版本。
 
-Sunshine!
+## 这是什么
 
-## Download
+| 项 | 值 |
+|---|---|
+| 基座 | OpenWRT 官方 `openwrt-25.12` 分支 |
+| 目标 | `x86/64` Generic（64 位 x86 通用 PC / 虚拟机）|
+| 镜像 | EFI + BIOS（GRUB）|
+| 包管理 | APK（`CONFIG_USE_APK=y`，opkg 已禁用）|
+| 内核 | 6.12（x86 目标在 25.12 锁定，不可在 menuconfig 选）|
+| 根分区 | 16 GiB（128 GB 物理盘剩约 112 GiB 未分配）|
+| 自带软件 | luci 等（见 `config.seed`）|
 
-Built firmware images are available for many architectures and come with a
-package selection to be used as WiFi home router. To quickly find a factory
-image usable to migrate from a vendor stock firmware to OpenWrt, try the
-*Firmware Selector*.
+## 仓库结构
 
-* [OpenWrt Firmware Selector](https://firmware-selector.openwrt.org/)
+| remote | 地址 | 作用 |
+|---|---|---|
+| `origin` | `git@github.com:HanFengA7/TanWRT.git` | 本仓库（独立仓库，非 fork）|
+| `upstream` | `https://github.com/openwrt/openwrt` | 官方仓库，只读，用于同步更新 |
 
-If your device is supported, please follow the **Info** link to see install
-instructions or consult the support resources listed below.
+- 工作分支：`tanwrt-25.12`（基于官方 `openwrt-25.12` + 定制）
+- `openwrt-25.12`：本地纯净跟踪官方的分支
 
-## 
+## 编译
 
-An advanced user may require additional or specific package. (Toolchain, SDK, ...) For everything else than simple firmware download, try the wiki download page:
-
-* [OpenWrt Wiki Download](https://openwrt.org/downloads)
-
-## Development
-
-To build your own firmware you need a GNU/Linux, BSD or macOS system (case
-sensitive filesystem required). Cygwin is unsupported because of the lack of a
-case sensitive file system.
-
-### Requirements
-
-You need the following tools to compile OpenWrt, the package names vary between
-distributions. A complete list with distribution specific packages is found in
-the [Build System Setup](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem)
-documentation.
-
-```
-binutils bzip2 diff find flex gawk gcc-6+ getopt grep install libc-dev libz-dev
-make4.1+ perl python3.7+ rsync subversion unzip which
+```bash
+git clone git@github.com:HanFengA7/TanWRT.git
+cd TanWRT
+git checkout tanwrt-25.12
+./build.sh
 ```
 
-### Quickstart
+镜像产出在 `bin/targets/x86/64/`。
 
-1. Run `./scripts/feeds update -a` to obtain all the latest package definitions
-   defined in feeds.conf / feeds.conf.default
+## 同步官方更新
 
-2. Run `./scripts/feeds install -a` to install symlinks for all obtained
-   packages into package/feeds/
+一条命令即可（详见 [SYNC.md](SYNC.md)）：
 
-3. Run `make menuconfig` to select your preferred configuration for the
-   toolchain, target system & firmware packages.
+```bash
+./build.sh
+```
 
-4. Run `make` to build your firmware. This will download all sources, build the
-   cross-compile toolchain and then cross-compile the GNU/Linux kernel & all chosen
-   applications for your target system.
+`build.sh` 自动执行：拉取官方 → rebase 到 `tanwrt-25.12` → 更新 feeds → 应用 `config.seed` → 编译 → 推送回本仓库。
 
-### Related Repositories
+日常手动同步：
 
-The main repository uses multiple sub-repositories to manage packages of
-different categories. All packages are installed via the OpenWrt package
-manager called `opkg`. If you're looking to develop the web interface or port
-packages to OpenWrt, please find the fitting repository below.
+```bash
+git fetch upstream
+git rebase upstream/openwrt-25.12
+./scripts/feeds update -a && ./scripts/feeds install -a
+cp config.seed .config && make defconfig
+make -j$(nproc)
+git push --force-with-lease origin tanwrt-25.12
+```
 
-* [LuCI Web Interface](https://github.com/openwrt/luci): Modern and modular
-  interface to control the device via a web browser.
+> 注意：`rebase` 会改写提交哈希，推送必须用 `--force-with-lease`。协作者在你 force-push 后需 `git fetch && git reset --hard origin/tanwrt-25.12`（或重新 clone）。
 
-* [OpenWrt Packages](https://github.com/openwrt/packages): Community repository
-  of ported packages.
+## 刷机与升级
 
-* [OpenWrt Routing](https://github.com/openwrt/routing): Packages specifically
-  focused on (mesh) routing.
+- **首次刷机**：将 `bin/targets/x86/64/openwrt-x86-64-generic-squashfs-combined-efi.img.gz` 写入磁盘（dd / balenaEtcher）
+- **升级**：用同一文件走 `sysupgrade`（写整盘镜像，保留配置与 16G 根分区）
 
-* [OpenWrt Video](https://github.com/openwrt/video): Packages specifically
-  focused on display servers and clients (Xorg and Wayland).
+## 自定义
 
-## Support Information
-
-For a list of supported devices see the [OpenWrt Hardware Database](https://openwrt.org/supported_devices)
-
-### Documentation
-
-* [Quick Start Guide](https://openwrt.org/docs/guide-quick-start/start)
-* [User Guide](https://openwrt.org/docs/guide-user/start)
-* [Developer Documentation](https://openwrt.org/docs/guide-developer/start)
-* [Technical Reference](https://openwrt.org/docs/techref/start)
-
-### Support Community
-
-* [Forum](https://forum.openwrt.org): For usage, projects, discussions and hardware advise.
-* [Support Chat](https://webchat.oftc.net/#openwrt): Channel `#openwrt` on **oftc.net**.
-
-### Developer Community
-
-* [Bug Reports](https://bugs.openwrt.org): Report bugs in OpenWrt
-* [Dev Mailing List](https://lists.openwrt.org/mailman/listinfo/openwrt-devel): Send patches
-* [Dev Chat](https://webchat.oftc.net/#openwrt-devel): Channel `#openwrt-devel` on **oftc.net**.
-
-## License
-
-OpenWrt is licensed under GPL-2.0
+- **配置差异**：改 `config.seed` → `make defconfig` → 提交（勿直接改 `.config`，`build.sh` 会用 `config.seed` 覆盖它）
+- **默认配置**：放进 `files/` 目录，刷机即生效
+- **自有软件包**：独立 feed 仓，在 `feeds.conf` 加 `src-git` 引用

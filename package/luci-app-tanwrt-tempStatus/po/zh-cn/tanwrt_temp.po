@@ -1,0 +1,63 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-tanwrt-tempStatus 1.0.0\n"
+"Language: zh-cn\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Temperature"
+msgstr "温度"
+
+msgid "Temperature History"
+msgstr "温度历史"
+
+msgid "Critical"
+msgstr "临界"
+
+msgid "Warning"
+msgstr "告警"
+
+msgid "OK"
+msgstr "正常"
+
+msgid "Temperature alert"
+msgstr "温度告警"
+
+msgid "Warning threshold (°C)"
+msgstr "警告阈值（°C）"
+
+msgid "Critical threshold (°C)"
+msgstr "临界阈值（°C）"
+
+msgid "Sensors above this value are shown in yellow"
+msgstr "超过该值的传感器以黄色显示"
+
+msgid "Sensors above this value are shown in red and trigger the alert banner"
+msgstr "超过该值的传感器以红色显示并触发告警横幅"
+
+msgid "Save"
+msgstr "保存"
+
+msgid "Settings saved"
+msgstr "设置已保存"
+
+msgid "Invalid threshold value"
+msgstr "无效的阈值"
+
+msgid "Failed to save settings"
+msgstr "保存设置失败"
+
+msgid "No temperature sensors found"
+msgstr "未找到温度传感器"
+
+msgid "No temperature history yet. Keep a status page open to collect samples."
+msgstr "暂无温度历史数据。保持状态页打开以采集数据。"
+
+msgid "Failed to load history"
+msgstr "加载历史数据失败"
+
+msgid "Sensor"
+msgstr "传感器"
+
+msgid "Status"
+msgstr "状态"

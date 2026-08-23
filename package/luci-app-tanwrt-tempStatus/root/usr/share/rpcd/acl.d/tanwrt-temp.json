@@ -1,0 +1,17 @@
+{
+	"luci-app-tanwrt-tempStatus": {
+		"description": "Grant access to TanWRT temperature status",
+		"read": {
+			"ubus": {
+				"tanwrt.temp": [ "get_sensors", "get_history", "get_config" ]
+			},
+			"uci": [ "tanwrt_temp" ]
+		},
+		"write": {
+			"ubus": {
+				"tanwrt.temp": [ "set_config" ]
+			},
+			"uci": [ "tanwrt_temp" ]
+		}
+	}
+}

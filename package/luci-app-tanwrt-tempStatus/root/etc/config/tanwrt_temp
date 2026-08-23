@@ -1,0 +1,31 @@
+config globals 'settings'
+	# 历史采样最小间隔（秒）。页面轮询天然驱动采样，同一秒内并发请求只记一个点。
+	option sample_interval '5'
+	# 历史保留时长（小时），环形缓冲自动裁剪
+	option history_hours '24'
+	# 状态页刷新间隔（秒）
+	option page_refresh '3'
+	# 全局默认告警阈值（摄氏度）
+	option warn_temp '70'
+	option crit_temp '85'
+	# 首页 overview 是否显示温度卡片
+	option enable_homepage '1'
+
+# 传感器别名与阈值覆盖。
+# chip   : hwmon 芯片名（/sys/class/hwmon/hwmon*/name，如 coretemp / k10temp / nct6775）
+# label  : 匹配该芯片下的 temp*_label；留空则匹配该芯片全部通道
+# alias  : 界面显示名；留空自动取 label 或 chip
+# warn/crit : 该传感器告警阈值，覆盖全局默认
+config sensor 'cpu'
+	option chip 'coretemp'
+	option label ''
+	option alias 'CPU'
+	option warn '75'
+	option crit '90'
+
+config sensor 'mb'
+	option chip 'nct6775'
+	option label 'System'
+	option alias 'Motherboard'
+	option warn '65'
+	option crit '75'

@@ -1,0 +1,62 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-app-tanwrt-tempStatus 1.0.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Temperature"
+msgstr ""
+
+msgid "Temperature History"
+msgstr ""
+
+msgid "Critical"
+msgstr ""
+
+msgid "Warning"
+msgstr ""
+
+msgid "OK"
+msgstr ""
+
+msgid "Temperature alert"
+msgstr ""
+
+msgid "Warning threshold (°C)"
+msgstr ""
+
+msgid "Critical threshold (°C)"
+msgstr ""
+
+msgid "Sensors above this value are shown in yellow"
+msgstr ""
+
+msgid "Sensors above this value are shown in red and trigger the alert banner"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Settings saved"
+msgstr ""
+
+msgid "Invalid threshold value"
+msgstr ""
+
+msgid "Failed to save settings"
+msgstr ""
+
+msgid "No temperature sensors found"
+msgstr ""
+
+msgid "No temperature history yet. Keep a status page open to collect samples."
+msgstr ""
+
+msgid "Failed to load history"
+msgstr ""
+
+msgid "Sensor"
+msgstr ""
+
+msgid "Status"
+msgstr ""

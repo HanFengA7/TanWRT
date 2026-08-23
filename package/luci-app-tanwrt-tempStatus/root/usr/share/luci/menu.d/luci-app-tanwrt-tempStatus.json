@@ -1,0 +1,25 @@
+{
+	"admin/status/tanwrt_temp": {
+		"title": "Temperature",
+		"order": 70,
+		"action": {
+			"type": "view",
+			"path": "tanwrt/tempstatus/status"
+		},
+		"depends": {
+			"acl": [ "luci-app-tanwrt-tempStatus" ]
+		}
+	},
+
+	"admin/status/tanwrt_temp/history": {
+		"title": "Temperature History",
+		"order": 71,
+		"action": {
+			"type": "view",
+			"path": "tanwrt/tempstatus/history"
+		},
+		"depends": {
+			"acl": [ "luci-app-tanwrt-tempStatus" ]
+		}
+	}
+}

@@ -3,9 +3,7 @@
 'require dom';
 'require poll';
 'require ui';
-'require tanwrt.tempstatus';
-
-var tempstatus = L.require('tanwrt.tempstatus');
+'require tanwrt.tempstatus as tempstatus';
 
 return view.extend({
 	refreshInterval: 3,

@@ -2,9 +2,7 @@
 'require view';
 'require dom';
 'require ui';
-'require tanwrt.tempstatus';
-
-var tempstatus = L.require('tanwrt.tempstatus');
+'require tanwrt.tempstatus as tempstatus';
 
 var PALETTE = [ '#185fa5', '#1d9e75', '#d85a30', '#993556', '#854f0b', '#534ab7', '#0f6e56', '#a32d2d' ];
 

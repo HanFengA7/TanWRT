@@ -1,4 +1,5 @@
 'use strict';
+'require baseclass';
 'require rpc';
 
 var callGetSensors = rpc.declare({
@@ -27,7 +28,7 @@ var callSetConfig = rpc.declare({
 	expect: { ok: true }
 });
 
-return {
+return baseclass.extend({
 	getSensors: function() {
 		return callGetSensors();
 	},
@@ -55,4 +56,4 @@ return {
 	formatTemp: function(temp) {
 		return '%s °C'.format(temp.toFixed(1));
 	}
-};
+});

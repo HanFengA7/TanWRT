@@ -5,27 +5,27 @@
 var callGetSensors = rpc.declare({
 	object: 'tanwrt.temp',
 	method: 'get_sensors',
-	expect: { sensors: [] }
+	expect: {}
 });
 
 var callGetHistory = rpc.declare({
 	object: 'tanwrt.temp',
 	method: 'get_history',
 	params: [ 'sensor', 'range' ],
-	expect: { points: [] }
+	expect: {}
 });
 
 var callGetConfig = rpc.declare({
 	object: 'tanwrt.temp',
 	method: 'get_config',
-	expect: { warn_temp: 0 }
+	expect: {}
 });
 
 var callSetConfig = rpc.declare({
 	object: 'tanwrt.temp',
 	method: 'set_config',
 	params: [ 'warn_temp', 'crit_temp', 'sensors' ],
-	expect: { ok: true }
+	expect: {}
 });
 
 return baseclass.extend({

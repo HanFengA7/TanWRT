@@ -1,31 +1,22 @@
-// TanWRT temperature status RPC backend
-// Collects temperatures from /sys/class/hwmon and /sys/class/thermal,
-// keeps a ring-buffer history in /tmp/tanwrt_temp/history.json and
-// exposes read/write config via uci.
-//
-// Exposed methods (ubus object "tanwrt.temp"):
-//   get_sensors           -> { sensors: [...], ts: <epoch> }
-//   get_history(sensor, range) -> { points: [[ts, temp], ...] }
-//   get_config            -> { warn_temp, crit_temp, sample_interval, history_hours, page_refresh, sensors: [...] }
-//   set_config(warn_temp, crit_temp, sensors) -> { ok: true }
+#!/usr/bin/ucode
 
 'use strict';
 
-import * as rpcd;
-import * as fs;
-import * as uci;
+import { readfile, writefile, stat, mkdir, lsdir } from 'fs';
+import { cursor } from 'uci';
 
 const HIST_DIR = '/tmp/tanwrt_temp';
 const HIST_FILE = HIST_DIR + '/history.json';
 const MAX_POINTS = 20000;
 
 function basename(path) {
-	var parts = split(path, '/');
-	return parts[len(parts) - 1];
+	const parts = split(path, '/');
+	return parts[length(parts) - 1];
 }
 
 function load_cfg() {
-	var cfg = {
+	const u = cursor();
+	const result = {
 		sample_interval: 5,
 		history_hours: 24,
 		page_refresh: 3,
@@ -34,28 +25,31 @@ function load_cfg() {
 		sensors: []
 	};
 
-	var c = uci.load('tanwrt_temp');
+	const all = u.get_all('tanwrt_temp');
 
-	if (c != null && c.globals != null && c.globals.settings != null) {
-		var g = c.globals.settings;
+	if (all != null) {
+		const g = all.settings != null ? all.settings : null;
 
-		if (g.sample_interval != null)
-			cfg.sample_interval = int(g.sample_interval);
-		if (g.history_hours != null)
-			cfg.history_hours = int(g.history_hours);
-		if (g.page_refresh != null)
-			cfg.page_refresh = int(g.page_refresh);
-		if (g.warn_temp != null)
-			cfg.warn_temp = int(g.warn_temp);
-		if (g.crit_temp != null)
-			cfg.crit_temp = int(g.crit_temp);
-	}
+		if (g != null) {
+			if (g.warn_temp != null)
+				result.warn_temp = int(g.warn_temp);
+			if (g.crit_temp != null)
+				result.crit_temp = int(g.crit_temp);
+			if (g.sample_interval != null)
+				result.sample_interval = int(g.sample_interval);
+			if (g.history_hours != null)
+				result.history_hours = int(g.history_hours);
+			if (g.page_refresh != null)
+				result.page_refresh = int(g.page_refresh);
+		}
 
-	if (c != null && c.sensor != null) {
-		for (var name in c.sensor) {
-			var s = c.sensor[name];
+		for (let name in all) {
+			const s = all[name];
 
-			cfg.sensors.push({
+			if (s.chip == null)
+				continue;
+
+			push(result.sensors, {
 				chip: s.chip != null ? s.chip : '',
 				label: s.label != null ? s.label : '',
 				alias: s.alias != null ? s.alias : '',
@@ -65,43 +59,41 @@ function load_cfg() {
 		}
 	}
 
-	return cfg;
+	return result;
 }
 
 function scan_sensors() {
-	var sensors = [];
-	var idx = 0;
-	var hwmons = fs.glob('/sys/class/hwmon/hwmon*');
-	hwmons.sort();
+	const sensors = [];
+	let idx = 0;
 
-	for (var i = 0; i < len(hwmons); i++) {
-		var h = hwmons[i];
-		var name = fs.readfile(h + '/name');
+	for (let hname in lsdir('/sys/class/hwmon')) {
+		const h = '/sys/class/hwmon/' + hname;
+		let name = readfile(h + '/name');
 
 		if (name == null)
 			continue;
 
 		name = trim(name);
 
-		var temps = fs.glob(h + '/temp*_input');
-		temps.sort();
+		for (let fname in lsdir(h)) {
+			if (substr(fname, length(fname) - length('_input')) != '_input')
+				continue;
 
-		for (var j = 0; j < len(temps); j++) {
-			var tpath = temps[j];
-			var raw = fs.readfile(tpath);
+			const tpath = h + '/' + fname;
+			const raw = readfile(tpath);
 
 			if (raw == null)
 				continue;
 
-			var temp = float(trim(raw)) / 1000.0;
-			var base = substr(tpath, 0, len(tpath) - len('_input'));
-			var label = fs.readfile(base + '_label');
+			const temp = +trim(raw) / 1000.0;
+			const base = substr(tpath, 0, length(tpath) - length('_input'));
+			let label = readfile(base + '_label');
 
 			if (label != null)
 				label = trim(label);
 
 			idx++;
-			sensors.push({
+			push(sensors, {
 				id: name + '_' + idx,
 				chip: name,
 				label: label != null ? label : '',
@@ -110,24 +102,23 @@ function scan_sensors() {
 		}
 	}
 
-	// Fall back to ACPI thermal zones for anything hwmon did not cover
-	var zones = fs.glob('/sys/class/thermal/thermal_zone*');
-	zones.sort();
+	for (let zname in lsdir('/sys/class/thermal')) {
+		if (substr(zname, 0, length('thermal_zone')) != 'thermal_zone')
+			continue;
 
-	for (var i = 0; i < len(zones); i++) {
-		var z = zones[i];
-		var type = fs.readfile(z + '/type');
-		var raw = fs.readfile(z + '/temp');
+		const z = '/sys/class/thermal/' + zname;
+		const type = readfile(z + '/type');
+		const raw = readfile(z + '/temp');
 
 		if (type == null || raw == null)
 			continue;
 
 		idx++;
-		sensors.push({
-			id: 'thermal_' + basename(z),
+		push(sensors, {
+			id: 'thermal_' + zname,
 			chip: trim(type),
 			label: trim(type),
-			temp: float(trim(raw)) / 1000.0
+			temp: +trim(raw) / 1000.0
 		});
 	}
 
@@ -135,16 +126,16 @@ function scan_sensors() {
 }
 
 function apply_cfg(sensors, cfg) {
-	var result = [];
+	const result = [];
 
-	for (var i = 0; i < len(sensors); i++) {
-		var s = sensors[i];
-		var warn = cfg.warn_temp;
-		var crit = cfg.crit_temp;
-		var alias = s.label != '' ? s.label : s.chip;
+	for (let i = 0; i < length(sensors); i++) {
+		const s = sensors[i];
+		let warn = cfg.warn_temp;
+		let crit = cfg.crit_temp;
+		let alias = s.label != '' ? s.label : s.chip;
 
-		for (var j = 0; j < len(cfg.sensors); j++) {
-			var sc = cfg.sensors[j];
+		for (let j = 0; j < length(cfg.sensors); j++) {
+			const sc = cfg.sensors[j];
 
 			if (sc.chip == s.chip && (sc.label == '' || sc.label == s.label)) {
 				if (sc.alias != '')
@@ -161,169 +152,189 @@ function apply_cfg(sensors, cfg) {
 		s.alias = alias;
 		s.status = (s.temp >= crit) ? 'crit' : ((s.temp >= warn) ? 'warn' : 'ok');
 
-		result.push(s);
+		push(result, s);
 	}
 
 	return result;
 }
 
-function ensure_dir() {
-	if (fs.stat(HIST_DIR) == null)
-		fs.mkdir(HIST_DIR, 0o755);
-}
-
 function record_history(sensors, cfg) {
-	ensure_dir();
+	try {
+		if (stat(HIST_DIR) == null)
+			mkdir(HIST_DIR, 0o755);
 
-	var content = fs.readfile(HIST_FILE);
-	var hist = (content != null) ? json(content) : null;
+		const content = readfile(HIST_FILE);
+		let hist = (content != null) ? json(content) : null;
 
-	if (hist == null || hist.sensors == null)
-		hist = { sensors: {} };
+		if (hist == null || hist.sensors == null)
+			hist = { sensors: {} };
 
-	var ts = time();
-	var cutoff = ts - cfg.history_hours * 3600;
+		const ts = time();
+		const cutoff = ts - cfg.history_hours * 3600;
 
-	for (var i = 0; i < len(sensors); i++) {
-		var s = sensors[i];
-		var arr = hist.sensors[s.id];
+		for (let i = 0; i < length(sensors); i++) {
+			const s = sensors[i];
+			let arr = hist.sensors[s.id];
 
-		if (arr == null)
-			arr = hist.sensors[s.id] = [];
+			if (arr == null)
+				arr = hist.sensors[s.id] = [];
 
-		var n = len(arr);
+			const n = length(arr);
 
-		// Deduplicate: multiple pollers within the same second overwrite instead of appending
-		if (n > 0 && arr[n - 1][0] == ts) {
-			arr[n - 1][1] = s.temp;
-			continue;
+			if (n > 0 && arr[n - 1][0] == ts) {
+				arr[n - 1][1] = s.temp;
+				continue;
+			}
+
+			push(arr, [ ts, s.temp ]);
+
+			while (length(arr) > MAX_POINTS || arr[0][0] < cutoff)
+				shift(arr);
 		}
 
-		arr.push([ ts, s.temp ]);
-
-		while (len(arr) > MAX_POINTS || arr[0][0] < cutoff)
-			arr.shift();
+		writefile(HIST_FILE, serialize(hist));
 	}
-
-	fs.writefile(HIST_FILE, serialize(hist));
+	catch (err) {
+		/* history is best-effort; never break the status query */
+	}
 }
 
 function read_history(sensor, hours) {
-	var content = fs.readfile(HIST_FILE);
+	const content = readfile(HIST_FILE);
 
 	if (content == null)
 		return [];
 
-	var hist = json(content);
+	const hist = json(content);
 
 	if (hist == null || hist.sensors == null)
 		return [];
 
-	var arr = hist.sensors[sensor];
+	const arr = hist.sensors[sensor];
 
 	if (arr == null)
 		return [];
 
-	var cutoff = time() - hours * 3600;
-	var points = [];
+	const cutoff = time() - hours * 3600;
+	const points = [];
 
-	for (var i = 0; i < len(arr); i++) {
+	for (let i = 0; i < length(arr); i++) {
 		if (arr[i][0] >= cutoff)
-			points.push(arr[i]);
+			push(points, arr[i]);
 	}
 
 	return points;
 }
 
-rpcd.declare({
-	'get_sensors': {
-		'call': function() {
-			var cfg = load_cfg();
-			var sensors = apply_cfg(scan_sensors(), cfg);
+const methods = {
+	get_sensors: {
+		call: function(request) {
+			try {
+				const cfg = load_cfg();
+				const sensors = apply_cfg(scan_sensors(), cfg);
 
-			record_history(sensors, cfg);
+				record_history(sensors, cfg);
 
-			return {
-				sensors: sensors,
-				ts: time()
-			};
+				return {
+					sensors: sensors,
+					ts: time()
+				};
+			}
+			catch (err) {
+				return { error: err };
+			}
 		}
 	},
 
-	'get_history': {
-		'args': {
-			'sensor': 'string',
-			'range': 'string'
+	get_history: {
+		args: {
+			sensor: 'string',
+			range: 'string'
 		},
-		'call': function(args) {
-			var hours = 24;
+		call: function(request) {
+			try {
+				let hours = 24;
 
-			if (args.range == '1h')
-				hours = 1;
-			else if (args.range == '6h')
-				hours = 6;
+				if (request.args.range == '1h')
+					hours = 1;
+				else if (request.args.range == '6h')
+					hours = 6;
 
-			return {
-				points: read_history(args.sensor, hours)
-			};
+				return {
+					points: read_history(request.args.sensor, hours)
+				};
+			}
+			catch (err) {
+				return { error: err };
+			}
 		}
 	},
 
-	'get_config': {
-		'call': function() {
-			var cfg = load_cfg();
-
-			return {
-				sample_interval: cfg.sample_interval,
-				history_hours: cfg.history_hours,
-				page_refresh: cfg.page_refresh,
-				warn_temp: cfg.warn_temp,
-				crit_temp: cfg.crit_temp,
-				sensors: cfg.sensors
-			};
+	get_config: {
+		call: function(request) {
+			try {
+				return load_cfg();
+			}
+			catch (err) {
+				return { error: err };
+			}
 		}
 	},
 
-	'set_config': {
-		'args': {
-			'warn_temp': 'int',
-			'crit_temp': 'int',
-			'sensors': 'array'
+	set_config: {
+		args: {
+			warn_temp: 'int',
+			crit_temp: 'int',
+			sensors: 'array'
 		},
-		'call': function(args) {
-			var c = uci.cfg('tanwrt_temp');
+		call: function(request) {
+			try {
+				const u = cursor();
+				const all = u.get_all('tanwrt_temp');
 
-			if (args.warn_temp != null && args.warn_temp > 0)
-				c.globals.settings.warn_temp = string(args.warn_temp);
-			if (args.crit_temp != null && args.crit_temp > 0)
-				c.globals.settings.crit_temp = string(args.crit_temp);
+				if (all == null)
+					return { error: 'config not found' };
 
-			if (args.sensors != null) {
-				for (var i = 0; i < len(args.sensors); i++) {
-					var sc = args.sensors[i];
+				if (request.args.warn_temp != null && request.args.warn_temp > 0)
+					u.set('tanwrt_temp', 'settings', 'warn_temp', string(request.args.warn_temp));
+				if (request.args.crit_temp != null && request.args.crit_temp > 0)
+					u.set('tanwrt_temp', 'settings', 'crit_temp', string(request.args.crit_temp));
 
-					if (sc.chip == null)
-						continue;
+				if (request.args.sensors != null) {
+					for (let name in all) {
+						const s = all[name];
 
-					for (var name in c.sensor) {
-						var s = c.sensor[name];
+						if (s.chip == null)
+							continue;
 
-						if (s.chip == sc.chip && (s.label == null || s.label == '' || sc.label == null || s.label == sc.label)) {
-							if (sc.alias != null && sc.alias != '')
-								s.alias = sc.alias;
-							if (sc.warn != null && sc.warn > 0)
-								s.warn = string(sc.warn);
-							if (sc.crit != null && sc.crit > 0)
-								s.crit = string(sc.crit);
+						for (let i = 0; i < length(request.args.sensors); i++) {
+							const sc = request.args.sensors[i];
+
+							if (sc.chip == null)
+								continue;
+
+							if (sc.chip == s.chip && (sc.label == null || sc.label == '' || s.label == null || s.label == sc.label)) {
+								if (sc.alias != null && sc.alias != '')
+									u.set('tanwrt_temp', name, 'alias', sc.alias);
+								if (sc.warn != null && sc.warn > 0)
+									u.set('tanwrt_temp', name, 'warn', string(sc.warn));
+								if (sc.crit != null && sc.crit > 0)
+									u.set('tanwrt_temp', name, 'crit', string(sc.crit));
+							}
 						}
 					}
 				}
+
+				u.save('tanwrt_temp');
+				u.commit('tanwrt_temp');
+
+				return { ok: true };
 			}
-
-			uci.save('tanwrt_temp');
-			uci.commit('tanwrt_temp');
-
-			return { ok: true };
+			catch (err) {
+				return { error: err };
+			}
 		}
 	}
-});
+};
+
+return { "tanwrt.temp": methods };

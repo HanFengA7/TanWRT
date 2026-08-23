@@ -6,7 +6,7 @@
 var callGetSensors = rpc.declare({
 	object: 'tanwrt.temp',
 	method: 'get_sensors',
-	expect: { sensors: [] }
+	expect: {}
 });
 
 return baseclass.extend({
